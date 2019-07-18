@@ -1,0 +1,22 @@
+service:
+  name: api-auth
+
+plugins:
+  - serverless-webpack
+
+provider:
+  name: aws
+  runtime: nodejs10.x
+  region: ap-northeast-2
+
+functions:
+  hello:
+    handler: handler.hello
+    events:
+      - http:
+          method: get
+          path: hello
+          authorizer: auth
+          cors: true
+  auth:
+    handler: handler.auth

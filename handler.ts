@@ -1,97 +1,68 @@
-import {
-  APIGatewayProxyHandler,
-  CustomAuthorizerHandler,
-  AuthResponse
-} from "aws-lambda";
+import { APIGatewayProxyHandler, CustomAuthorizerHandler } from "aws-lambda";
 import "source-map-support/register";
 import * as jwt from "jsonwebtoken";
 
 const jwtSecret = "verySecret";
+const admin = {
+  id: "test",
+  password: "1234"
+};
 
 const splitByDelimiter = (data: string, delim: string) => {
-  const pos = data.indexOf(delim);
+  const pos = data ? data.indexOf(delim) : -1;
   return pos > 0 ? [data.substr(0, pos), data.substr(pos + 1)] : ["", ""];
 };
 
-const login = (authData: string) => {
-  const [id, pw] = splitByDelimiter(authData, ":");
-  console.log(`login`, id, pw);
-  console.log(`login id`, `lacti=[${id}]`, "lacti" === id);
-  console.log(`login id`, `1234=[${pw}]`, "1234" === pw);
-  if (id !== "lacti" || pw !== "1234") {
-    throw new Error("Unauthorized");
+const decodeBase64 = (input: string) =>
+  Buffer.from(input, "base64").toString("utf8");
+
+export const login: APIGatewayProxyHandler = async event => {
+  // https://tools.ietf.org/html/rfc7617
+  // Authorization: Basic BASE64("id:password")
+  const [type, data] = splitByDelimiter(event.headers["Authorization"], " ");
+  const [id, pw] = splitByDelimiter(decodeBase64(data), ":");
+
+  // Accept only if all of type, id and password are expected value.
+  const accepted = type === "Basic" && id === admin.id && pw === admin.password;
+  if (!accepted) {
+    return {
+      statusCode: 401,
+      body: "Unauthorized"
+    };
   }
+  // Generate a JWT to verify it at "auth" function easily.
   const token = jwt.sign({ id }, jwtSecret, { expiresIn: "30m" });
-  console.log(`token`, token);
-  return token;
-};
-
-const verify = (authData: string) => {
-  console.log(`authorize`, authData);
-  const decoded = jwt.verify(authData, jwtSecret);
-  console.log(`decoded`, decoded);
-  return decoded;
-};
-
-const authorize = (token: string): { success: boolean; token?: string } => {
-  console.log(`auth-token`, token);
-  if (!token) {
-    throw new Error("Unauthorized");
-  }
-
-  const [prefix, authData] = splitByDelimiter(token, " ");
-  console.log(`prefix-data`, prefix, authData);
-  switch (prefix) {
-    case "Basic":
-      token = login(
-        Buffer.from(authData, "base64")
-          .toString("utf8")
-          .trim()
-      );
-      return { success: !!token, token };
-    case "Bearer":
-      if (verify(authData)) {
-        return { success: true };
-      }
-  }
-  throw new Error("Unauthorized");
+  return {
+    statusCode: 200,
+    body: JSON.stringify({ token })
+  };
 };
 
 export const auth: CustomAuthorizerHandler = async event => {
-  console.log(event);
-  console.log(JSON.stringify(event));
-  try {
-    const result = authorize(event.authorizationToken);
-    return {
-      principalId: "user",
-      policyDocument: {
-        Version: "2012-10-17",
-        Statement: [
-          {
-            Action: "execute-api:Invoke",
-            Effect: result.success ? "Allow" : "Deny",
-            Resource: event.methodArn
-          }
-        ]
-      },
-      context: {
-        token: result.token
-      }
-    } as AuthResponse;
-  } catch (error) {
-    console.error(error);
-    throw new Error("Unauthorized");
-  }
+  // https://tools.ietf.org/html/rfc6750
+  // Authorization: Bearer b64token
+  const [type, token] = splitByDelimiter(event.authorizationToken, " ");
+
+  // Create the appropriate policy based on the validity of the token.
+  const allow = type === "Bearer" && !!jwt.verify(token, jwtSecret);
+  return {
+    principalId: "user",
+    policyDocument: {
+      Version: "2012-10-17",
+      Statement: [
+        {
+          Action: "execute-api:Invoke",
+          Effect: allow ? "Allow" : "Deny",
+          Resource: event.methodArn
+        }
+      ]
+    }
+  };
 };
 
 export const hello: APIGatewayProxyHandler = async event => {
-  console.log(JSON.stringify(event, null, 2));
   return {
     statusCode: 200,
-    headers: {
-      "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Credentials": true
-    },
-    body: JSON.stringify(event.requestContext.authorizer)
+    body: JSON.stringify(event)
   };
 };

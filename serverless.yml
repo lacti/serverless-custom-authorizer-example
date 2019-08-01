@@ -1,5 +1,5 @@
 service:
-  name: api-auth
+  name: hello-custom-authorizer
 
 plugins:
   - serverless-webpack
@@ -10,6 +10,14 @@ provider:
   region: ap-northeast-2
 
 functions:
+  login:
+    handler: handler.login
+    events:
+      - http:
+          method: post
+          path: login
+  auth:
+    handler: handler.auth
   hello:
     handler: handler.hello
     events:
@@ -17,6 +25,3 @@ functions:
           method: get
           path: hello
           authorizer: auth
-          cors: true
-  auth:
-    handler: handler.auth

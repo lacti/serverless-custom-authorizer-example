@@ -18,10 +18,24 @@ functions:
           path: login
   auth:
     handler: handler.auth
-  hello:
-    handler: handler.hello
+  hello1:
+    handler: handler.hello1
     events:
       - http:
           method: get
-          path: hello
+          path: hello1
+          authorizer: auth
+  hello2:
+    handler: handler.hello2
+    events:
+      - http:
+          method: get
+          path: hello2
+          authorizer: auth
+  hello3:
+    handler: handler.hello3
+    events:
+      - http:
+          method: get
+          path: hello3
           authorizer: auth

@@ -45,6 +45,13 @@ export const auth: CustomAuthorizerHandler = async event => {
 
   // Create the appropriate policy based on the validity of the token.
   const allow = type === "Bearer" && !!jwt.verify(token, jwtSecret);
+
+  // arn:aws:execute-api:REGION:ACCOUNT_ID:API_ID/STAGE/METHOD/FUNCTION_NAME
+  const [, , , region, accountId, apiId, stage] = event.methodArn.split(/[:/]/);
+  const scopedMethodArn =
+    ["arn", "aws", "execute-api", region, accountId, apiId].join(":") +
+    "/" +
+    [stage, /* method= */ "*", /* function= */ "*"].join("/");
   return {
     principalId: "user",
     policyDocument: {
@@ -53,16 +60,30 @@ export const auth: CustomAuthorizerHandler = async event => {
         {
           Action: "execute-api:Invoke",
           Effect: allow ? "Allow" : "Deny",
-          Resource: event.methodArn
+          Resource: scopedMethodArn
         }
       ]
     }
   };
 };
 
-export const hello: APIGatewayProxyHandler = async event => {
+export const hello1: APIGatewayProxyHandler = async event => {
   return {
     statusCode: 200,
-    body: JSON.stringify(event)
+    body: JSON.stringify({ hello: "1", event })
+  };
+};
+
+export const hello2: APIGatewayProxyHandler = async event => {
+  return {
+    statusCode: 200,
+    body: JSON.stringify({ hello: "2", event })
+  };
+};
+
+export const hello3: APIGatewayProxyHandler = async event => {
+  return {
+    statusCode: 200,
+    body: JSON.stringify({ hello: "3", event })
   };
 };
